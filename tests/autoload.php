@@ -15,6 +15,7 @@ if (!function_exists('translate')) {
     }
 }
 
+
 if (!function_exists('esc_attr')) {
     function esc_attr($text)
     {
@@ -47,6 +48,7 @@ if (!function_exists('network_admin_url')) {
     }
 }
 
+
 if (!function_exists('apply_filters')) {
     function apply_filters($hook, $value)
     {
@@ -68,6 +70,9 @@ if (!function_exists('wp_get_current_user')) {
     }
 }
 
+// Note: Avoid defining common WP core functions like __(), wp_cache_*, get_site_url, wp_mail here.
+// Tests that need them should mock with Brain\Monkey to avoid conflicts with Patchwork.
+
 require BASE_DIR . '/src/base.lib.php';
 require BASE_DIR . '/src/request.lib.php';
 require BASE_DIR . '/src/fileinfo.lib.php';
@@ -80,6 +85,17 @@ require BASE_DIR . '/src/api.lib.php';
 require BASE_DIR . '/src/mail.lib.php';
 require BASE_DIR . '/src/command.lib.php';
 require BASE_DIR . '/src/template.lib.php';
+// Provide a minimal stub for sucuriscanMainPages to avoid loading globals.php (which depends on WP hooks)
+if (!function_exists('sucuriscanMainPages')) {
+    function sucuriscanMainPages()
+    {
+        return array(
+            'sucuriscan' => 'Dashboard',
+            'sucuriscan_firewall' => 'Firewall',
+            'sucuriscan_settings' => 'Settings',
+        );
+    }
+}
 require BASE_DIR . '/src/fsscanner.lib.php';
 require BASE_DIR . '/src/hardening.lib.php';
 require BASE_DIR . '/src/interface.lib.php';

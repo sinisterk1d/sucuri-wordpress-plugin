@@ -1,10 +1,118 @@
+const adminUser = { login: Cypress.env('wp_user') || 'admin', pass: Cypress.env('wp_pass') || 'password' };
+const testAdminUser = { login: 'sucuri-admin', pass: 'password' };
+const extraUser = { login: 'sucuri', pass: 'password' };
+
+function go2faPage() {
+    cy.visit('/wp-admin/admin.php?page=sucuriscan_2fa');
+}
+
+function setModeAllUsers(mode = 'activate_all') {
+    go2faPage();
+    cy.get('[data-cy=sucuriscan_twofactor_bulk_control] select').select(mode);
+    cy.get('[data-cy=sucuriscan_twofactor_bulk_control] input[type=submit]').click();
+    cy.get('.sucuriscan-alert, .updated, .notice').should('contain.text', 'Two-Factor');
+}
+
+function attemptLogin(username, password) {
+    cy.visit('/wp-login.php');
+    cy.get('#user_login').clear().wait(300).type(username).wait(100);
+    cy.get('#user_pass').clear().wait(300).type(password);
+    cy.get('#wp-submit').click();
+}
+
+function setModeSelectedUsersFor(users, mode = 'activate_selected') {
+    go2faPage();
+    cy.get('[data-cy="twofactor-user-checkbox-1"]').check({ force: true });
+    cy.get('[data-cy=sucuriscan_twofactor_bulk_control] select').select('deactivate_all');
+    cy.get('[data-cy=sucuriscan_twofactor_bulk_control] input[type=submit]').click();
+
+    users.forEach((u) => {
+        cy.contains('table tr', u.login, { matchCase: false })
+            .find('input[name="sucuriscan_twofactor_users[]"]').check({ force: true });
+    });
+
+    cy.get('[data-cy=sucuriscan_twofactor_bulk_control] select').select(mode);
+    cy.get('[data-cy=sucuriscan_twofactor_bulk_control] input[type=submit]').click();
+}
+
+function resetForSelectedUsers(users) {
+    go2faPage();
+    users.forEach((u) => {
+        cy.contains('table tr', u.login, { matchCase: false })
+            .find('input[name="sucuriscan_twofactor_users[]"]').check({ force: true });
+    });
+    cy.get('[data-cy=sucuriscan_twofactor_bulk_control] select').select('reset_selected');
+    cy.get('[data-cy=sucuriscan_twofactor_bulk_control] input[type=submit]').click();
+}
+
+
+function loginAndExpect2FA(username, password, expected = 'verify') {
+    cy.visit('/wp-login.php');
+    cy.get('#user_login').clear().wait(300).type(username).wait(100);
+    cy.get('#user_pass').clear().wait(300).type(password);
+    cy.get('#wp-submit').click();
+    if (expected === 'setup') {
+        cy.url().should('include', 'action=sucuri-2fa-setup');
+        cy.contains('Set up Two-Factor Authentication');
+    } else {
+        cy.url().should('include', 'action=sucuri-2fa');
+        cy.contains('Two-Factor Authentication');
+    }
+}
+
+function finishWithCode(code) {
+    cy.get('[name="sucuriscan_totp_code"]').clear().type(code);
+    cy.get('#sucuriscan-totp-submit').click();
+}
+
+function extractSecretFromSetupPage() {
+    return cy.get('code').first().invoke('text').then((txt) => txt.trim());
+}
+
+
 beforeEach(() => {
+    cy.setCookie('sucuriscan_waf_dismissed', '1');
     cy.session("Login to WordPress", () => {
         cy.login();
     });
 });
 
 describe("Run e2e tests", () => {
+    beforeEach(() => {
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+    });
+
+
+    it("WAF API Key modal appears only on Dashboard, dismisses once, and CTA navigates to WAF", () => {
+        cy.clearCookies();
+        cy.login();
+
+        // Dashboard: modal should exist if not dismissed and no WAF key is configured
+        cy.visit('/wp-admin/admin.php?page=sucuriscan');
+
+        cy.get('[data-cy="sucuriscan-modal-container"].sucuriscan-register-site-modal').should('exist');
+
+        // main action should take you to firewall page
+        cy.get('[data-cy="sucuriscan-waf-modal-main-action"]').click();
+        cy.url().should('include', 'page=sucuriscan_firewall');
+
+        // Other pages: should not appear
+        cy.visit('/wp-admin/admin.php?page=sucuriscan_2fa');
+        cy.reload();
+        cy.get('[data-cy="sucuriscan-modal-container"].sucuriscan-register-site-modal').should('not.exist');
+        cy.visit('/wp-admin/admin.php?page=sucuriscan_firewall');
+        cy.reload();
+        cy.get('[data-cy="sucuriscan-modal-container"].sucuriscan-register-site-modal').should('not.exist');
+        cy.visit('/wp-admin/admin.php?page=sucuriscan_settings');
+        cy.reload();
+        cy.get('[data-cy="sucuriscan-modal-container"].sucuriscan-register-site-modal').should('not.exist');
+
+        cy.visit('/wp-admin/admin.php?page=sucuriscan');
+
+        cy.get('[data-cy="sucuriscan-modal-container"].sucuriscan-register-site-modal').should('not.exist');
+
+    });
+
     it("can change malware scan target", () => {
         const testDomain = "sucuri.net";
 
@@ -102,7 +210,7 @@ describe("Run e2e tests", () => {
 
         cy.get("[data-cy=sucuriscan_import_export_settings_textarea]").type(
             jsonPayload,
-            {parseSpecialCharSequences: false},
+            { parseSpecialCharSequences: false },
         );
         cy.get("[data-cy=sucuriscan_import_export_settings_checkbox]").click();
         cy.get("[data-cy=sucuriscan_import_export_settings_submit]").click();
@@ -867,13 +975,13 @@ describe("Run e2e tests", () => {
         cy.intercept("POST", "/wp-admin/admin-ajax.php?page=sucuriscan", (req) => {
             if (req.body.includes("get_audit_logs")) {
                 req.reply((res) => {
-                    res.send({fixture: "audit_logs.json"});
+                    res.send({ fixture: "audit_logs.json" });
                 });
             }
 
             if (req.body.includes("auditlogs_send_logs")) {
                 req.reply((res) => {
-                    res.send({fixture: "auditlogs_send_logs.json"});
+                    res.send({ fixture: "auditlogs_send_logs.json" });
                 });
             }
         });
@@ -942,32 +1050,33 @@ describe("Run e2e tests", () => {
         Cypress.session.clearAllSavedSessions();
         cy.visit("/");
 
-        // This user is added automatically at .github/workflows/end-to-end-tests.yml
-        cy.login("sucuri", "password");
+        cy.login("sucuri-reset", "password");
 
         Cypress.session.clearAllSavedSessions();
         cy.login();
 
         cy.visit("http://localhost:8889/wp-admin/admin.php?page=sucuriscan_post_hack_actions");
 
-        cy.get('input[value="2"]').click();
+        cy.get('.sucuriscan-reset-password-table')
+            .contains('tr', 'sucuri-reset', { matchCase: false })
+            .find('input[type="checkbox"]').check({ force: true });
         cy.get("[data-cy=sucuriscan-reset-password-button]").click();
 
         cy.get("[data-cy=sucuriscan-reset-password-user-field]").contains(
-            "sucuri (Done)",
+            "sucuri-reset (Done)",
         );
 
         Cypress.session.clearCurrentSessionData();
 
         cy.visit("/wp-login.php");
 
-        cy.get("#user_login").clear().wait(200).type("sucuri");
+        cy.get("#user_login").clear().wait(200).type("sucuri-reset");
         cy.get("#user_pass").clear().wait(200).type("password");
 
         cy.get("#wp-submit").click();
 
         cy.get("#login_error").contains(
-            "The password you entered for the username sucuri is incorrect.",
+            "The password you entered for the username sucuri-reset is incorrect.",
         );
     });
 
@@ -1039,7 +1148,7 @@ describe("Run e2e tests", () => {
         });
 
         // 404s
-        cy.request({url: "/?p=12", failOnStatusCode: false}).then((response) => {
+        cy.request({ url: "/?p=12", failOnStatusCode: false }).then((response) => {
             expect(response.headers["cache-control"]).to.exist;
             expect(response.headers["cache-control"]).to.equal("max-age=600");
         });
@@ -1167,7 +1276,7 @@ describe("Run e2e tests", () => {
         cy.get('.sucuriscan-auditlog-entry').should('have.length.greaterThan', 0);
 
         // Test plugins filter
-        cy.get('#plugins').select('Activated', {force: true});
+        cy.get('#plugins').select('Activated', { force: true });
         cy.get('[data-cy=sucuriscan_auditlogs_filter_button]').click();
 
         // Verify that all logs are plugin activations
@@ -1192,7 +1301,7 @@ describe("Run e2e tests", () => {
         cy.get('[data-cy=sucuriscan_auditlogs_clear_filter_button]').click();
 
         // Combine plugins and users filters
-        cy.get('#plugins').select('Activated', {force: true});
+        cy.get('#plugins').select('Activated', { force: true });
         cy.get('#logins').select('Succeeded');
         cy.get('[data-cy=sucuriscan_auditlogs_filter_button]').click();
 
@@ -1207,7 +1316,7 @@ describe("Run e2e tests", () => {
         cy.get('[data-cy=sucuriscan_auditlogs_clear_filter_button]').click();
 
         // Combine time and login filters
-        cy.get('#time').select('Last 7 Days', {force: true});
+        cy.get('#time').select('Last 7 Days', { force: true });
         cy.get('#logins').select('Succeeded');
         cy.get('[data-cy=sucuriscan_auditlogs_filter_button]').click();
 
@@ -1245,10 +1354,10 @@ describe("Run e2e tests", () => {
         cy.get("input[name='sucuriscan_enforced_default_src']").should("not.be.checked");
         cy.get("input[name='sucuriscan_csp_default_src']").should("be.disabled");
 
-        cy.get("input[name='sucuriscan_enforced_default_src']").check({force: true});
+        cy.get("input[name='sucuriscan_enforced_default_src']").check({ force: true });
         cy.get("input[name='sucuriscan_csp_default_src']").should("not.be.disabled");
 
-        cy.get("input[name='sucuriscan_enforced_default_src']").uncheck({force: true});
+        cy.get("input[name='sucuriscan_enforced_default_src']").uncheck({ force: true });
         cy.get("input[name='sucuriscan_csp_default_src']").should("be.disabled");
     });
 
@@ -1256,13 +1365,13 @@ describe("Run e2e tests", () => {
     it("Saves enforced state and value changes and persists after reload", () => {
         cy.visit("/wp-admin/admin.php?page=sucuriscan_headers_management");
 
-        cy.get("input[name='sucuriscan_enforced_default_src']").check({force: true});
+        cy.get("input[name='sucuriscan_enforced_default_src']").check({ force: true });
         cy.get("input[name='sucuriscan_csp_default_src']").clear().type("'none'");
 
         cy.get("[data-cy=sucuriscan_csp_options_mode_button]").select(
             "Report Only",
         );
-        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({ force: true });
 
 
         cy.get("input[name='sucuriscan_csp_default_src']").should("have.value", "'none'").and("not.be.disabled");
@@ -1275,7 +1384,7 @@ describe("Run e2e tests", () => {
         cy.get("[data-cy=sucuriscan_csp_options_mode_button]").select(
             "Disabled",
         );
-        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             expect(response.headers["content-security-policy-report-only"]).to.not.exist;
@@ -1285,15 +1394,15 @@ describe("Run e2e tests", () => {
     it("Test multi_checkbox directive (sandbox)", () => {
         cy.visit("/wp-admin/admin.php?page=sucuriscan_headers_management");
 
-        cy.get("input[name='sucuriscan_enforced_sandbox']").check({force: true});
-        cy.get("input[name='sucuriscan_csp_sandbox_allow-forms']").check({force: true});
-        cy.get("input[name='sucuriscan_csp_sandbox_allow-popups']").check({force: true});
-        cy.get("input[name='sucuriscan_csp_sandbox_allow-orientation-lock']").check({force: true});
+        cy.get("input[name='sucuriscan_enforced_sandbox']").check({ force: true });
+        cy.get("input[name='sucuriscan_csp_sandbox_allow-forms']").check({ force: true });
+        cy.get("input[name='sucuriscan_csp_sandbox_allow-popups']").check({ force: true });
+        cy.get("input[name='sucuriscan_csp_sandbox_allow-orientation-lock']").check({ force: true });
 
         cy.get("[data-cy=sucuriscan_csp_options_mode_button]").select(
             "Report Only",
         );
-        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             expect(response.headers["content-security-policy-report-only"]).to.exist;
@@ -1301,12 +1410,12 @@ describe("Run e2e tests", () => {
             expect(response.headers["content-security-policy-report-only"]).to.equal("default-src 'none'; sandbox allow-forms allow-orientation-lock allow-popups");
         });
 
-        cy.get("input[name='sucuriscan_csp_sandbox_allow-forms']").uncheck({force: true});
-        cy.get("input[name='sucuriscan_csp_sandbox_allow-popups']").uncheck({force: true});
-        cy.get("input[name='sucuriscan_csp_sandbox_allow-orientation-lock']").uncheck({force: true});
-        cy.get("input[name='sucuriscan_csp_sandbox_allow-same-origin']").check({force: true});
+        cy.get("input[name='sucuriscan_csp_sandbox_allow-forms']").uncheck({ force: true });
+        cy.get("input[name='sucuriscan_csp_sandbox_allow-popups']").uncheck({ force: true });
+        cy.get("input[name='sucuriscan_csp_sandbox_allow-orientation-lock']").uncheck({ force: true });
+        cy.get("input[name='sucuriscan_csp_sandbox_allow-same-origin']").check({ force: true });
 
-        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             expect(response.headers["content-security-policy-report-only"]).to.exist;
@@ -1325,11 +1434,11 @@ describe("Run e2e tests", () => {
             expect(response.headers["content-security-policy-report-only"]).not.to.include("upgrade-insecure-requests");
         });
 
-        cy.get("input[name='sucuriscan_enforced_upgrade_insecure_requests']").check({force: true});
+        cy.get("input[name='sucuriscan_enforced_upgrade_insecure_requests']").check({ force: true });
         cy.get("input[name='sucuriscan_csp_upgrade_insecure_requests_upgrade-insecure-requests']").should("not.be.disabled");
-        cy.get("input[name='sucuriscan_csp_upgrade_insecure_requests_upgrade-insecure-requests']").check({force: true});
+        cy.get("input[name='sucuriscan_csp_upgrade_insecure_requests_upgrade-insecure-requests']").check({ force: true });
 
-        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_csp_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             const cspHeader = response.headers["content-security-policy-report-only"];
@@ -1341,14 +1450,14 @@ describe("Run e2e tests", () => {
         cy.visit("/wp-admin/admin.php?page=sucuriscan_headers_management");
 
         cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Origin']")
-            .uncheck({force: true})
+            .uncheck({ force: true })
             .should("not.be.checked");
 
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Origin']")
             .should("be.disabled");
 
         cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Origin']")
-            .check({force: true})
+            .check({ force: true })
             .should("be.checked");
 
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Origin']")
@@ -1358,13 +1467,13 @@ describe("Run e2e tests", () => {
     it("Saves enforced state and value changes for Access-Control-Allow-Origin and persists after reload", () => {
         cy.visit("/wp-admin/admin.php?page=sucuriscan_headers_management");
 
-        cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Origin']").check({force: true});
+        cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Origin']").check({ force: true });
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Origin']")
             .clear()
             .type("example.com");
 
         cy.get("[data-cy=sucuriscan_cors_options_mode_button]").select("enabled");
-        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({ force: true });
 
         cy.reload();
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Origin']")
@@ -1380,15 +1489,15 @@ describe("Run e2e tests", () => {
     it("Multi-checkbox for Access-Control-Allow-Methods works correctly", () => {
         cy.visit("/wp-admin/admin.php?page=sucuriscan_headers_management");
 
-        cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Methods']").check({force: true});
+        cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Methods']").check({ force: true });
 
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Methods_GET']")
-            .check({force: true});
+            .check({ force: true });
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Methods_OPTIONS']")
-            .check({force: true});
+            .check({ force: true });
 
         cy.get("[data-cy=sucuriscan_cors_options_mode_button]").select("enabled");
-        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             expect(response.headers["access-control-allow-methods"]).to.exist;
@@ -1399,10 +1508,10 @@ describe("Run e2e tests", () => {
         });
 
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Methods_POST']")
-            .check({force: true});
+            .check({ force: true });
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Methods_OPTIONS']")
-            .uncheck({force: true});
-        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({force: true});
+            .uncheck({ force: true });
+        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             const allowMethods = response.headers["access-control-allow-methods"];
@@ -1417,19 +1526,19 @@ describe("Run e2e tests", () => {
         cy.visit("/wp-admin/admin.php?page=sucuriscan_headers_management");
 
         cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Credentials']")
-            .uncheck({force: true});
+            .uncheck({ force: true });
 
-        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             expect(response.headers["access-control-allow-credentials"]).to.not.exist;
         });
 
         cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Credentials']")
-            .check({force: true});
-        cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Credentials_Access-Control-Allow-Credentials']").check({force: true});
+            .check({ force: true });
+        cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Credentials_Access-Control-Allow-Credentials']").check({ force: true });
 
-        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             expect(response.headers["access-control-allow-credentials"]).to.exist;
@@ -1440,13 +1549,13 @@ describe("Run e2e tests", () => {
     it("Test disabling entire CORS mode removes all CORS headers", () => {
         cy.visit("/wp-admin/admin.php?page=sucuriscan_headers_management");
 
-        cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Origin']").check({force: true});
+        cy.get("input[name='sucuriscan_enforced_Access-Control-Allow-Origin']").check({ force: true });
         cy.get("input[name='sucuriscan_cors_Access-Control-Allow-Origin']")
             .clear()
             .type("example.org");
 
         cy.get("[data-cy=sucuriscan_cors_options_mode_button]").select("enabled");
-        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             expect(response.headers["access-control-allow-origin"]).to.exist;
@@ -1454,7 +1563,7 @@ describe("Run e2e tests", () => {
         });
 
         cy.get("[data-cy=sucuriscan_cors_options_mode_button]").select("disabled");
-        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({force: true});
+        cy.get("[data-cy=sucuriscan_headers_cors_control_submit_btn]").click({ force: true });
 
         cy.request("/").then((response) => {
             expect(response.headers["access-control-allow-origin"]).to.not.exist;
@@ -1490,4 +1599,190 @@ describe("Run e2e tests", () => {
         cy.get("#php-vulnerability-results").contains('Error: Could not fetch PHP vulnerabilities.');
         cy.get('.sucuriscan-themes-list-body').should('have.length', 2);
     })
+});
+
+describe('Two-Factor Authentication', () => {
+    it('enforces 2FA for all users and completes verify with a valid code', () => {
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        setModeAllUsers();
+
+        // Reset designated test admin to force setup
+        go2faPage();
+        cy.contains('table tr', testAdminUser.login, { matchCase: false })
+            .find('input[name="sucuriscan_twofactor_users[]"]').check({ force: true });
+        cy.get('[data-cy=sucuriscan_twofactor_bulk_control] select').select('reset_selected');
+        cy.get('[data-cy=sucuriscan_twofactor_bulk_control] input[type=submit]').click();
+
+        // First login → setup
+        loginAndExpect2FA(testAdminUser.login, testAdminUser.pass, 'setup');
+        extractSecretFromSetupPage().then((secret) => {
+            cy.task('totp', { secret }).then((code) => {
+                expect(code).to.match(/^\d{6}$/);
+                finishWithCode(code);
+                cy.url().should('contain', '/wp-admin/');
+            });
+        });
+
+        // Subsequent login → verify
+        Cypress.session.clearAllSavedSessions();
+        cy.clearCookies();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        loginAndExpect2FA(testAdminUser.login, testAdminUser.pass, 'verify');
+        loginAndExpect2FA(extraUser.login, extraUser.pass, 'setup'); // Ensure other user also forced to setup
+
+        // Cleanup: deactivate all and reset test user
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        go2faPage();
+        setModeAllUsers('deactivate_all');
+        resetForSelectedUsers([testAdminUser]);
+    });
+
+    it('enforces 2FA for selected users and completes setup for a non-admin user', () => {
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        setModeSelectedUsersFor([extraUser]);
+
+        // First login for extra user → setup
+        loginAndExpect2FA(extraUser.login, extraUser.pass, 'setup');
+        extractSecretFromSetupPage().then((secret) => {
+            cy.task('totp', { secret }).then((code) => {
+                expect(code).to.match(/^\d{6}$/);
+                finishWithCode(code);
+                cy.url().should('contain', '/wp-admin/');
+            });
+        });
+
+        // Subsequent login → verify with invalid then valid flow
+        Cypress.session.clearAllSavedSessions();
+        cy.clearCookies();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        loginAndExpect2FA(extraUser.login, extraUser.pass, 'verify');
+        finishWithCode('000000');
+        cy.get('#login_error').should('contain.text', 'Invalid');
+
+        // Cleanup: deactivate all and ensure user can login normally
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        go2faPage();
+
+        setModeAllUsers('deactivate_all');
+        resetForSelectedUsers([extraUser]);
+
+        Cypress.session.clearAllSavedSessions();
+        cy.clearCookies();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        attemptLogin(extraUser.login, extraUser.pass);
+        cy.url().should('contain', '/wp-admin/');
+    });
+
+    it('resets 2FA from Profile page for non-admin user', () => {
+        // Enable for selected user
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        setModeSelectedUsersFor([extraUser], 'activate_selected');
+
+        // Setup flow for user
+        loginAndExpect2FA(extraUser.login, extraUser.pass, 'setup');
+        extractSecretFromSetupPage().then((secret) => {
+            cy.task('totp', { secret }).then((code) => {
+                finishWithCode(code);
+                cy.url().should('contain', '/wp-admin/');
+            });
+        });
+
+        // Reset from Profile
+        cy.visit('/wp-admin/profile.php');
+        cy.get('[data-cy="sucuriscan-2fa-status-text"]').should('contain.text', 'Two-Factor Authentication is enabled for this account.');
+        cy.get('[data-cy="sucuriscan-2fa-reset-btn"]').click({ force: true });
+        cy.on('window:confirm', (txt) => {
+            expect(txt).to.contains('This will disable two-factor for this user. Continue?');
+            return true;
+        });
+        cy.get('#sucuriscan-topt-qr').should('be.visible');
+    });
+
+    it('activates 2fa for all users and disables it again', () => {
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        setModeAllUsers();
+
+        cy.clearCookies();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+
+        loginAndExpect2FA(extraUser.login, extraUser.pass);
+
+        extractSecretFromSetupPage().then((secret) => {
+            cy.task('totp', { secret }).then((code) => {
+                expect(code).to.match(/^\d{6}$/);
+                finishWithCode(code);
+                cy.url().should('contain', '/wp-admin/');
+            });
+        });
+
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        setModeAllUsers('deactivate_all');
+        resetForSelectedUsers([extraUser]);
+
+        cy.clearCookies();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+
+        attemptLogin(extraUser.login, extraUser.pass);
+        cy.url().should('contain', '/wp-admin/');
+    });
+
+    it('activates 2fa for all users and disables it for only one user', () => {
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+        setModeAllUsers();
+
+        cy.clearCookies();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+
+        loginAndExpect2FA(extraUser.login, extraUser.pass);
+
+        extractSecretFromSetupPage().then((secret) => {
+            cy.task('totp', { secret }).then((code) => {
+                expect(code).to.match(/^\d{6}$/);
+                finishWithCode(code);
+                cy.url().should('contain', '/wp-admin/');
+            });
+        });
+
+        cy.login();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+
+        setModeSelectedUsersFor([extraUser], 'deactivate_selected');
+
+        cy.clearCookies();
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+
+        attemptLogin(extraUser.login, extraUser.pass);
+        cy.url().should('contain', '/wp-admin/');
+    });
+
+    it('enforces 2FA for all users from sucuri dashboard', () => {
+        cy.login(testAdminUser.login, testAdminUser.pass);
+        cy.setCookie('sucuriscan_waf_dismissed', '1');
+
+        setModeAllUsers('reset_all');
+
+        go2faPage();
+        extractSecretFromSetupPage().then((secret) => {
+            cy.task('totp', { secret }).then((code) => {
+                expect(code).to.match(/^\d{6}$/);
+                cy.get('[name=sucuriscan_2fa_enforce_all]').click({ force: true });
+                finishWithCode(code);
+                cy.url().should('contain', '/wp-admin/');
+            });
+        });
+
+        loginAndExpect2FA(testAdminUser.login, testAdminUser.pass, 'verify');
+        loginAndExpect2FA(extraUser.login, extraUser.pass, 'setup');
+        loginAndExpect2FA(adminUser.login, adminUser.pass, 'setup');
+    });
+
 });

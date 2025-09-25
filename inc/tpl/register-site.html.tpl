@@ -1,52 +1,28 @@
+<div class="sucuriscan-panel">
 
-<p>{{An API key is required to activate some additional tools available in this plugin. The keys are free and you can virtually generate an unlimited number of them as long as the domain name and email address are unique. The key is used to authenticate the HTTP requests sent by the plugin to an API service managed by Sucuri Inc.}}</p>
+    <p>Activate your Sucuri Firewall API Key now to instantly enable premium vulnerability scanning:</p>
 
-<div class="sucuriscan-inline-alert-info">
-    <p>{{If you experience issues generating the API key you can request one by sending the domain name and email address that you want to use to <a href="mailto:info@sucuri.net">info@sucuri.net</a>. Note that generating a key for a website that is not facing the Internet is not possible because the API service needs to validate that the domain name exists.}}</p>
-</div>
+    <ul class="sucuriscan-styles-list">
+        <li>Vulnerability scanning for WordPress Core, PHP, plugins & themes!</li>
+        <li>See your WAF settings directly inside WordPress.</li>
+        <li>A sleek dark theme.</li>
+        <li>More things to come! ✨</li>
+    </ul>
 
-<form action="%%SUCURI.URL.Settings%%" method="post">
-    <input type="hidden" name="sucuriscan_page_nonce" value="%%SUCURI.PageNonce%%" />
-    <input type="hidden" name="sucuriscan_plugin_api_key" value="1" />
+    <p>Don't have an API Key yet? <a href="https://sucuri.net/website-firewall/" target="_blank">Learn more and get one</a></p>
 
-    <fieldset class="sucuriscan-clearfix">
-        <label>{{Website:}}</label>
-        <input type="text" value="%%SUCURI.CleanDomain%%" readonly="readonly">
-    </fieldset>
-
-    <fieldset class="sucuriscan-clearfix">
-        <label>{{E-mail:}}</label>
-        <select name="sucuriscan_setup_user">
-            %%%SUCURI.AdminEmails%%%
-        </select>
-    </fieldset>
-
-    <fieldset class="sucuriscan-clearfix">
-        <label>{{DNS Lookups}}</label>
-        <input type="hidden" name="sucuriscan_dns_lookups" value="disable" />
-        <input type="checkbox" name="sucuriscan_dns_lookups" value="enable" checked="checked" />
-        <span class="sucuriscan-tooltip" content="{{Check the box if your website is behind a known firewall service, this guarantees that the IP address of your visitors will be detected correctly for the security logs. You can change this later from the settings.}}">{{Enable DNS Lookups On Startup}}</span>
-    </fieldset>
-
+    <strong>How to activate:</strong>
     <p>
-        <label>
-            <input type="hidden" name="sucuriscan_consent_tos" value="0" />
-            <input type="checkbox" name="sucuriscan_consent_tos" value="1" />
-            <span>{{I agree to the <a target="_blank" href="https://sucuri.net/terms">Terms of Service</a>.}}</span>
-        </label>
+      Go to Sucuri <strong>Firewall Dashboard</strong> → <strong>API</strong> → <strong>API Key (for Plugin)</strong>;  
+      copy the key, then paste it into the <em>Firewall API Key</em> field on the plugin's <a href="%%SUCURI.URL.Firewall%%" target="_blank">Firewall Management page</a>.
     </p>
 
-    <p>
-        <label>
-            <input type="hidden" name="sucuriscan_consent_priv" value="0" />
-            <input type="checkbox" name="sucuriscan_consent_priv" value="1" />
-            <span>{{I have read and understand the <a target="_blank" href="https://sucuri.net/privacy">Privacy Policy</a>.}}</span>
-        </label>
-    </p>
+    <p><em>This prompt will appear only once per administrator user.</em></p>
 
     <div class="sucuriscan-clearfix">
         <div class="sucuriscan-pull-left">
-            <button type="submit" class="button button-primary">{{Submit}}</button>
+            <a href="%%SUCURI.URL.Firewall%%#settings" class="button button-primary" data-cy="sucuriscan-waf-modal-main-action">Enter WAF API Key</a>
+            <a href="#" class="button button-secondary sucuriscan-modal-close" data-cy="sucuriscan-waf-modal-dismiss">Maybe later</a>
         </div>
     </div>
-</form>
+</div>
