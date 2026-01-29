@@ -13,4 +13,5 @@ cypress.config.js
 .idea/
 
 composer.phar
+opencode.json
 .DS_Store
