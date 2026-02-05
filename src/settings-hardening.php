@@ -126,6 +126,66 @@ class SucuriScanHardeningPage extends SucuriScan
     }
 
     /**
+     * Prevents access to the site if the request does not come from Sucuri Firewall.
+     *
+     * @return string HTML code with the replaced template variables.
+     */
+    public static function bypassPrevention()
+    {
+        if (SucuriScan::isNginxServer() || SucuriScan::isIISServer()) {
+            return ''; /* empty page */
+        }
+
+        $params = array();
+
+	    $params['URL.Hardening'] = admin_url('admin.php?page=sucuriscan_hardening_prevention');
+
+        if (self::processRequest(__FUNCTION__)) {
+            $result = SucuriScanHardening::hardenBypassPrevention();
+
+            if ($result === true) {
+                SucuriScanEvent::reportNoticeEvent(__('Hardening applied for Bypass Prevention', 'sucuri-scanner'));
+                SucuriScanInterface::info(__('Hardening applied for Bypass Prevention', 'sucuri-scanner'));
+            } else {
+                SucuriScanInterface::error(__('Error applying hardening, check the permissions.', 'sucuri-scanner'));
+            }
+        }
+
+        if (self::processRequest(__FUNCTION__ . '_revert')) {
+            $result = SucuriScanHardening::unhardenBypassPrevention();
+
+            if ($result === true) {
+                SucuriScanEvent::reportErrorEvent(__('Hardening reverted for Bypass Prevention', 'sucuri-scanner'));
+                SucuriScanInterface::info(__('Hardening reverted for Bypass Prevention', 'sucuri-scanner'));
+            } else {
+                SucuriScanInterface::error(__('Access file is not writable, check the permissions.', 'sucuri-scanner'));
+            }
+        }
+
+        $params['Hardening.Title'] = __('Block Direct Access (Bypass Prevention)', 'sucuri-scanner');
+        $params['Hardening.Description'] = __(
+            'Prevent attackers from bypassing the WAF by blocking direct access to your origin server. This adds rules to your .htaccess file to only allow traffic from Sucuri IP addresses. Note: You must be behind the Sucuri Firewall to enable this feature.',
+            'sucuri-scanner'
+        );
+
+        if (!SucuriScan::isBehindFirewall()) {
+             $params['Hardening.Status'] = 0;
+             $params['Hardening.FieldText'] = __('Apply Hardening', 'sucuri-scanner');
+             $params['Hardening.FieldAttrs'] = 'disabled';
+        } elseif (SucuriScanHardening::isBypassPreventionEnabled()) {
+            $params['Hardening.Status'] = 1;
+            $params['Hardening.FieldName'] = __FUNCTION__ . '_revert';
+            $params['Hardening.FieldText'] = __('Revert Hardening', 'sucuri-scanner');
+        } else {
+            $params['Hardening.Status'] = 0;
+            $params['Hardening.FieldName'] = __FUNCTION__;
+            $params['Hardening.FieldText'] = __('Apply Hardening', 'sucuri-scanner');
+        }
+
+        return self::drawSection($params);
+    }
+
+    /**
      * Checks if the WordPress version is the latest available.
      *
      * Why keep your site updated? WordPress is an open-source project which
