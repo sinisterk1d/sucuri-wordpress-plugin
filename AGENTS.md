@@ -122,5 +122,6 @@ The project uses `@wordpress/env` (wp-env) for the local development environment
 
 ### Git Workflow
 
+- **NEVER COMMIT CODE:** Do not create git commits unless explicitly instructed by the user.
 - Do not commit `node_modules`, `vendor`, or `.wp-env` directories.
 - Follow conventional commits for commit messages if possible.

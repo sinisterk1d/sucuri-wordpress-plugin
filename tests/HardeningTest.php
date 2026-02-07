@@ -9,6 +9,8 @@ final class HardeningTest extends TestCase
 {
     use MockeryPHPUnitIntegration;
 
+    private $auditLogBackup;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -24,6 +26,11 @@ final class HardeningTest extends TestCase
 
         $_SERVER['SERVER_SOFTWARE'] = 'apache';
 
+        // Backup audit log file to prevent test pollution
+        if (file_exists(SUCURI_DATA_STORAGE . '/sucuri-auditqueue.php')) {
+            $this->auditLogBackup = file_get_contents(SUCURI_DATA_STORAGE . '/sucuri-auditqueue.php');
+        }
+
         // Creating temp .php files in order to test allowing/disallowing them
         file_put_contents(SUCURI_DATA_STORAGE . '/archive.php', '<?php echo "Hello World";');
         file_put_contents(SUCURI_DATA_STORAGE . '/export.php', '<?php echo "Hello World";');
@@ -33,6 +40,11 @@ final class HardeningTest extends TestCase
     {
         Monkey\tearDown();
         parent::tearDown();
+
+        // Restore audit log file
+        if ($this->auditLogBackup !== null) {
+            file_put_contents(SUCURI_DATA_STORAGE . '/sucuri-auditqueue.php', $this->auditLogBackup);
+        }
 
         // Removing temp files
         if (file_exists($this->getHtaccessPath())) {

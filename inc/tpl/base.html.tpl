@@ -204,10 +204,6 @@
             </div>
         </div>
 
-        <div id="sucuriscan-theme-toggle-wrapper" class="sucuriscan-pull-right %%SUCURI.PremiumVisibility%%">
-            <div id="sucuriscan-theme-toggle-placeholder"></div>
-        </div>
-
         <div class="sucuriscan-navbar">
             <ul>
                 <li><button id="firewall-clear-cache-button"
@@ -236,6 +232,10 @@
                         class="button button-primary sucuriscan-%%SUCURI.SettingsButtonVisibility%%">{{Settings}}</a>
                 </li>
             </ul>
+        </div>
+
+        <div id="sucuriscan-theme-toggle-wrapper" class="sucuriscan-pull-right %%SUCURI.PremiumVisibility%%">
+            <div id="sucuriscan-theme-toggle-placeholder"></div>
         </div>
     </div>
 

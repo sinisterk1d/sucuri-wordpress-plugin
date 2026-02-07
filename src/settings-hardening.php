@@ -53,6 +53,7 @@ class SucuriScanHardeningPage extends SucuriScan
         $params['Hardening.FieldText'] = '';
         $params['Hardening.FieldAttrs'] = '';
         $params['Hardening.Description'] = '';
+        $params['Hardening.Modal'] = '';
 
         foreach ($args as $keyname => $value) {
             $params[$keyname] = $value;
@@ -180,6 +181,19 @@ class SucuriScanHardeningPage extends SucuriScan
             $params['Hardening.Status'] = 0;
             $params['Hardening.FieldName'] = __FUNCTION__;
             $params['Hardening.FieldText'] = __('Apply Hardening', 'sucuri-scanner');
+
+            /* WAF Bypass Modal */
+            $modal_params = array(
+                'Modal.Title'        => __('Enable WAF Bypass Prevention', 'sucuri-scanner'),
+                'Modal.WarningLabel' => __('Warning:', 'sucuri-scanner'),
+                'Modal.WarningText'  => __('This option will block all access to your site except from Sucuri Firewall IPs.', 'sucuri-scanner'),
+                'Modal.RevertText'   => __('If you disable the Sucuri Firewall service in the future, you MUST revert this setting first, or you will lose access to your site.', 'sucuri-scanner'),
+                'Modal.ConfirmLabel' => __('To confirm, type ENABLE in the box below:', 'sucuri-scanner'),
+                'Modal.Button'       => __('Enable', 'sucuri-scanner'),
+                'Modal.Placeholder'  => __('Type ENABLE to confirm', 'sucuri-scanner'),
+            );
+            
+            $params['Hardening.Modal'] = SucuriScanTemplate::getSection('hardening-bypass-modal-content', $modal_params);
         }
 
         return self::drawSection($params);
